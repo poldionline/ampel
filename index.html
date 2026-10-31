@@ -24,7 +24,7 @@ button{font:inherit;color:var(--ink);background:rgba(255,255,255,.18);border:1.5
 button[aria-pressed=true]{background:var(--y);border-color:var(--y);color:#1d2421}
 button:focus-visible{outline:3px solid var(--y);outline-offset:3px}
 .l{display:flex;align-items:center;justify-content:center;font:700 54px/1 system-ui,sans-serif;color:rgba(0,0,0,.6)}
-#cw{position:relative;width:min(300px,80vw);border-radius:14px;overflow:hidden;border:2px solid var(--mute)}
+#cw{position:fixed;z-index:5;top:calc(env(safe-area-inset-top,0px) + 10px);right:10px;width:min(150px,38vw);border-radius:12px;overflow:hidden;border:2px solid #fff;box-shadow:0 4px 16px rgba(0,0,0,.4);background:#000}
 #cw[hidden]{display:none}
 #vd{width:100%;display:block}
 #ov{position:absolute;inset:0;width:100%;height:100%}
@@ -38,6 +38,7 @@ button:disabled{opacity:.45}
 <p class="hint" id="h">Tippe irgendwo, um zu schalten</p>
 <button id="n" aria-pressed="false">Nachtmodus</button>
 <button id="cm" aria-pressed="false">Kamera-Erkennung</button>
+<button id="ab" aria-pressed="false" hidden>Pfeil-Erkennung: aus</button>
 <div id="cw" hidden><video id="vd" playsinline muted autoplay></video><canvas id="ov"></canvas></div>
 <p class="hint" id="cs" role="status"></p>
 <script>
@@ -69,7 +70,7 @@ n.addEventListener('click',function(e){
     st='red';show(1,0,0,'Rot');
   }
 });
-var camOn=false,stream=null,vd=document.getElementById('vd'),ovc=document.getElementById('ov'),cw=document.getElementById('cw'),cs=document.getElementById('cs'),cm=document.getElementById('cm'),an=document.createElement('canvas'),ax=null,loop=null,hist=[],ev=[];
+var camOn=false,stream=null,vd=document.getElementById('vd'),ovc=document.getElementById('ov'),cw=document.getElementById('cw'),cs=document.getElementById('cs'),cm=document.getElementById('cm'),ab=document.getElementById('ab'),arrowOn=false,an=document.createElement('canvas'),ax=null,loop=null,hist=[],ev=[];
 an.width=160;an.height=120;
 function cls(r,g,b){
   var mx=Math.max(r,g,b),mn=Math.min(r,g,b),d=mx-mn;if(mx<150||d<70||d/mx<.45)return 0;
@@ -102,7 +103,7 @@ function decide(r){
   var Rd=ok(b[1]),Y=ok(b[2]),Gn=ok(b[3]),pick=null,s='none';
   if(Rd&&Y&&Math.min(Rd.a,Y.a)>=Math.max(Rd.a,Y.a)*.3&&Math.abs((Rd.x0+Rd.x1)-(Y.x0+Y.x1))<(Rd.x1-Rd.x0+Y.x1-Y.x0+2)){s='ry';pick=Rd;}
   else{var l=[[Rd,'red'],[Y,'yellow'],[Gn,'green']].filter(function(e){return e[0];}).sort(function(p,q){return q[0].a-p[0].a;})[0];if(l){pick=l[0];s=l[1];}}
-  return{s:s,ar:pick&&s!='ry'?arrowOf(pick,r.m):'',box:pick};}
+  return{s:s,ar:arrowOn&&pick&&s!='ry'?arrowOf(pick,r.m):'',box:pick};}
 function apply(s,ar){
   var map={none:[0,0,0,'Keine Ampel erkannt'],red:[1,0,0,'Rot'],yellow:[0,1,0,'Gelb'],green:[0,0,1,'Grün'],ry:[1,1,0,'Rot-Gelb']},o=map[s];
   show(o[0],o[1],o[2],o[3]+(ar?' mit Pfeil '+ar:''));
@@ -122,9 +123,10 @@ function step(){
   else if(cnt[top]>=3){var p=top.split('|');apply(p[0],p[1]);}}
 function enter(msg){
   camOn=true;clearTimeout(tm);clearInterval(bl);busy=false;night=false;n.setAttribute('aria-pressed','false');n.textContent='Nachtmodus';n.disabled=true;
-  cw.hidden=false;cm.setAttribute('aria-pressed','true');cm.textContent='Kamera-Erkennung beenden';h.textContent=msg;cs.textContent='';
+  cw.hidden=false;cm.setAttribute('aria-pressed','true');cm.textContent='Kamera-Erkennung beenden';ab.hidden=false;h.textContent=msg;cs.textContent='';
   ax=an.getContext('2d',{willReadFrequently:true});hist=[];ev=[];show(0,0,0,'Suche Ampel …');loop=setInterval(step,80);}
-function drawOv(r,d){var cx=ovc.getContext('2d'),W=ovc.width=vd.clientWidth;ovc.height=vd.clientHeight;if(d.box){var k=W/160;cx.strokeStyle='#fff';cx.lineWidth=3;cx.strokeRect(d.box.x0*k-3,d.box.y0*k-3,(d.box.x1-d.box.x0+1)*k+6,(d.box.y1-d.box.y0+1)*k+6);}}
+function drawOv(r,d){var cx=ovc.getContext('2d'),W=ovc.width=vd.clientWidth;ovc.height=vd.clientHeight;if(d.box){var k=W/160;cx.strokeStyle='#fff';cx.lineWidth=3;cx.strokeRect(d.box.x0*k-3,d.box.y0*k-3,(d.box.x1-d.box.x0+1)*k+6,(d.box.y1-d.box.y0+1)*k+6);}
+  var mx=W/2,my=ovc.height/2;cx.strokeStyle='rgba(255,255,255,.7)';cx.lineWidth=1;cx.beginPath();cx.moveTo(mx-8,my);cx.lineTo(mx+8,my);cx.moveTo(mx,my-8);cx.lineTo(mx,my+8);cx.stroke();}
 function startCam(){
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){cs.textContent='Kamera nicht verfügbar. Öffne die Seite direkt im Browser und erlaube die Kamera.';return;}
   cs.textContent='Kamera wird gestartet …';
@@ -132,10 +134,11 @@ function startCam(){
     stream=sm;vd.srcObject=sm;vd.loop=false;if(vd.play)vd.play();enter('Halte die Kamera auf eine Ampel (ein Licht gut sichtbar).');
   }).catch(function(err){cs.textContent='Kamera nicht erlaubt oder nicht verfügbar ('+((err&&err.name)||'Fehler')+'). Öffne die Seite direkt im Browser und erlaube die Kamera.';});}
 function stopCam(){
-  clearInterval(loop);if(stream)stream.getTracks().forEach(function(tk){tk.stop();});stream=null;vd.srcObject=null;camOn=false;cw.hidden=true;
+  clearInterval(loop);if(stream)stream.getTracks().forEach(function(tk){tk.stop();});stream=null;vd.srcObject=null;camOn=false;cw.hidden=true;ab.hidden=true;
   cm.setAttribute('aria-pressed','false');cm.textContent='Kamera-Erkennung';n.disabled=false;h.textContent='Tippe irgendwo, um zu schalten';cs.textContent='';st='red';show(1,0,0,'Rot');}
 cm.addEventListener('click',function(e){e.stopPropagation();if(camOn)stopCam();else startCam();});
 cw.addEventListener('click',function(e){e.stopPropagation();});
+ab.addEventListener('click',function(e){e.stopPropagation();arrowOn=!arrowOn;ab.setAttribute('aria-pressed',arrowOn);ab.textContent='Pfeil-Erkennung: '+(arrowOn?'an':'aus');hist=[];});
 show(1,0,0,'Rot');
 })();
 </script>
