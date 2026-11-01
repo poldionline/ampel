@@ -126,12 +126,32 @@ function step(){
     held=[top,at];lastSeen=nw;apply(top,at);}
   else if(held&&nw-lastSeen<2000)apply(held[0],held[1]);
   else{held=null;apply('none','');}}
+function enter(msg){
+  camOn=true;clearTimeout(tm);clearInterval(bl);busy=false;night=false;n.setAttribute('aria-pressed','false');n.textContent='Nachtmodus';n.disabled=true;
+  cw.hidden=false;cm.setAttribute('aria-pressed','true');cm.textContent='Kamera-Erkennung beenden';h.textContent=msg;cs.textContent='';
+  ax=an.getContext('2d',{willReadFrequently:true});hist=[];ev=[];held=null;show(0,0,0,'Suche Ampel …');loop=setInterval(step,80);}
+function drawOv(r,d){
+  var cx=ovc.getContext('2d'),W=ovc.width=vd.clientWidth,Hh=ovc.height=vd.clientHeight;
+  if(d.box){var k=W/160;cx.strokeStyle='#fff';cx.lineWidth=3;cx.strokeRect(d.box.x0*k-3,d.box.y0*k-3,(d.box.x1-d.box.x0+1)*k+6,(d.box.y1-d.box.y0+1)*k+6);}
+  var mx=W/2,my=Hh/2;cx.strokeStyle='rgba(255,255,255,.7)';cx.lineWidth=1;cx.beginPath();cx.moveTo(mx-8,my);cx.lineTo(mx+8,my);cx.moveTo(mx,my-8);cx.lineTo(mx,my+8);cx.stroke();}
+function camErr(err){
+  var nm=(err&&err.name)||'Fehler',M={NotAllowedError:'Kamerazugriff blockiert. Erlaube die Kamera in den Browser-Einstellungen für diese Seite und lade sie neu.',NotFoundError:'Keine Kamera gefunden.',NotReadableError:'Die Kamera wird gerade von einer anderen App oder einem anderen Tab benutzt. Schließe diese und tippe erneut auf den Button.',SecurityError:'Die Kamera ist hier gesperrt. Öffne die Seite direkt im Browser über https.'};
+  cs.textContent=(M[nm]||'Kamera konnte nicht gestartet werden.')+' ('+nm+')';}
+function openCam(list){
+  var c=list.shift();
+  return navigator.mediaDevices.getUserMedia(c).catch(function(err){
+    var nm=err&&err.name;
+    if(list.length&&(nm=='OverconstrainedError'||nm=='NotReadableError'||nm=='AbortError'||nm=='TypeError'||nm=='ConstraintNotSatisfiedError'))return openCam(list);
+    throw err;});}
 function startCam(){
-  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){cs.textContent='Kamera nicht verfügbar. Öffne die Seite direkt im Browser und erlaube die Kamera.';return;}
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){cs.textContent=window.isSecureContext===false?'Die Kamera braucht eine https-Verbindung.':'Dieser Browser oder diese Ansicht erlaubt keinen Kamerazugriff. Öffne die Seite direkt in Safari oder Chrome.';return;}
+  if(stream){stream.getTracks().forEach(function(tk){tk.stop();});stream=null;}
   cs.textContent='Kamera wird gestartet …';
-  navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:640},height:{ideal:480}},audio:false}).then(function(sm){
-    stream=sm;vd.srcObject=sm;vd.loop=false;if(vd.play)vd.play();enter('Halte die Kamera auf eine Ampel (ein Licht gut sichtbar).');
-  }).catch(function(err){cs.textContent='Kamera nicht erlaubt oder nicht verfügbar ('+((err&&err.name)||'Fehler')+'). Öffne die Seite direkt im Browser und erlaube die Kamera.';});}
+  openCam([{video:{facingMode:{ideal:'environment'},width:{ideal:640},height:{ideal:480}},audio:false},{video:{facingMode:'environment'},audio:false},{video:true,audio:false}]).then(function(sm){
+    stream=sm;vd.srcObject=sm;vd.muted=true;vd.loop=false;
+    var pr=vd.play();if(pr&&pr.catch)pr.catch(function(){});
+    enter('Halte die Kamera auf eine Ampel (ein Licht gut sichtbar).');
+  },camErr).catch(function(e){cs.textContent='Start fehlgeschlagen: '+((e&&e.message)||e);});}
 function stopCam(){
   clearInterval(loop);if(stream)stream.getTracks().forEach(function(tk){tk.stop();});stream=null;vd.srcObject=null;camOn=false;cw.hidden=true;
   cm.setAttribute('aria-pressed','false');cm.textContent='Kamera-Erkennung';n.disabled=false;h.textContent='Tippe irgendwo, um zu schalten';cs.textContent='';st='red';show(1,0,0,'Rot');}
